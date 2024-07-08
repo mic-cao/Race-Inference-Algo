@@ -1,0 +1,180 @@
+---
+title: "scratch"
+output: html_document
+date: "2024-01-30"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(yaml)
+library(data.table)
+library(dplyr)
+# library(writexl)
+library(openxlsx)
+```
+
+
+```{r}
+dict <- yaml.load_file("R:\\CR4230\\1940_2.0\\us1940b_usa.yml")
+dict <- bind_rows(dict$variables)
+```
+
+```{r}
+start <- proc.time()
+ppl39 <- read.csv("S:\\CR4230\\Projects\\Project Collaboration wx233_CR4230\\census_people_39.csv")
+proc.time() - start
+# ppl40 <- read.csv("S:\\CR4230\\Projects\\Project Collaboration wx233_CR4230\\census_people_40.csv")
+# ppl41 <- read.csv("S:\\CR4230\\Projects\\Project Collaboration wx233_CR4230\\census_people_41.csv")
+start <- proc.time()
+hhd39 <- read.csv("S:\\CR4230\\Projects\\Project Collaboration wx233_CR4230\\census_households_39.csv")
+proc.time() - start
+```
+
+
+Match Race (hard code version)
+```{r}
+# race_code <- c(seq(100, 150, 10), 200, 210, 300:399, 400, 410, 420, 500, 600, 700)
+# race_list <- c("White", "Spanish White", "Blank (White)", "Portuguese", "Mexican", 
+#                "Puerto Rican", "Black/Negro", "Mulatto", 
+#                rep("American Indian/Alaskan Native", 100),
+#                "Chinese", "Taiwanese", "Chinese and Taiwanese", "Japanese", "Filipino",
+#                "Other Race")
+
+# ppl39$RACE <- race_list[match(ppl39$RACE, race_code)]
+```
+
+Match Race (yml version)
+```{r}
+dict_race <- bind_rows(dict$values)[dict$name == "RACE",]
+ppl39$RACE <- dict_race$label[match(ppl39$RACE, dict_race$value)]
+table(ppl39$RACE)
+if (sum(is.na(ppl39$RACE)) == 0) {print("All Matched!")}
+
+ppl39 <- read.csv("S:\\CR4230\\Projects\\Project Collaboration wx233_CR4230\\census_people_28.csv")
+missing_idx <- which(is.na(ppl39$BPL))
+```
+
+Match Marital Status (yml version)
+```{r}
+dict_marst <- bind_rows(dict$values)[dict$name == "MARST",]
+ppl39$MARST <- dict_marst$label[match(ppl39$MARST, dict_marst$value)]
+if (sum(is.na(ppl39$MARST)) == 0) {print("All Matched!")}
+```
+Match Birthplace (yml version)
+```{r}
+dict_bpl <- bind_rows(dict$values)[dict$name == "BPL",]
+ppl39$BPL <- dict_bpl$label[match(ppl39$BPL, dict_bpl$value)]
+if (sum(is.na(ppl39$BPL)) == 0) {print("All Matched!")}
+
+# p <- ppl39[,c("BPL", "BPLSTR")]
+# View(p[p$BPL!=p$BPLSTR,]) # mismatches between BPL and BPLSTR
+```
+
+Match Nativity (yml version)
+```{r}
+dict_nat <- bind_rows(dict$values)[dict$name == "NATIVITY",]
+ppl39$NATIVITY <- dict_nat$label[match(ppl39$NATIVITY, dict_nat$value)]
+if (sum(is.na(ppl39$NATIVITY)) == 0) {print("All Matched!")}
+```
+
+Match Citizen Status (yml version)
+```{r}
+dict_cit <- bind_rows(dict$values)[dict$name == "CITIZEN",]
+ppl39$CITIZEN <- dict_cit$label[match(ppl39$CITIZEN, dict_cit$value)]
+if (sum(is.na(ppl39$CITIZEN)) == 0) {print("All Matched!")}
+```
+
+Match Hispanic Race (yml version)
+```{r}
+dict_his <- bind_rows(dict$values)[dict$name == "HISPAN",]
+ppl39$HISPAN <- dict_his$label[match(ppl39$HISPAN, dict_his$value)]
+if (sum(is.na(ppl39$HISPAN)) == 0) {print("All Matched!")}
+```
+
+Match Mother Tongue (yml version)
+```{r}
+dict_mt <- bind_rows(dict$values)[dict$name == "MTONGUE",]
+ppl39$MTONGUE <- dict_mt$label[match(ppl39$MTONGUE, dict_mt$value)]
+if (sum(is.na(ppl39$MTONGUE)) == 0) {print("All Matched!")}
+```
+
+
+Simplified Function for Column Matching
+```{r}
+process_df <- function(df, cols_to_match, cols_to_drop)
+{
+  df <- df[, !(names(df) %in% cols_to_drop)]
+  
+  for (col in cols_to_match)
+  {
+    dict_temp <- bind_rows(dict$values)[dict$name == col, ]
+    df[, col] <- dict_temp$label[match(df[, col], dict_temp$value)]
+    
+    if (sum(is.na(df[, col])) != 0)
+    {
+      print(paste("WARNING:",
+                  sum(is.na(df[, col])), "records in", col, "don't have a match!"))
+    }
+  }
+  
+  # Next steps: collapse the hispanic col, identify col to drop, the join tables
+  
+  return(df)
+}
+
+
+ppl39 <- read.csv("S:\\CR4230\\Projects\\Project Collaboration wx233_CR4230\\census_people_39.csv")
+cols_to_match <- c("RACE", "MARST", "BPL", "NATIVITY", "CITIZEN", 
+                   "HISPAN", "MTONGUE")
+cols_to_drop <- c()
+ppl39 <- process_df(ppl39, cols_to_match, cols_to_drop)
+```
+
+
+For Kate: Column Categories
+```{r}
+wb <- createWorkbook()
+
+addWorksheet(wb, sheetName = "RACE")
+writeData(wb, sheet = 1, x = dict_race)
+
+addWorksheet(wb, sheetName = "HISPAN")
+writeData(wb, sheet = 2, x = dict_his)
+
+race_hispan <- expand.grid(RACE = dict_race$label, HISPAN = dict_his$label)
+count <- table(match(paste(ppl39$RACE, ppl39$HISPAN),
+                      paste(race_hispan$RACE, race_hispan$HISPAN)))
+idx <- as.numeric(names(result))
+race_hispan$Count <- 0
+race_hispan$Count[idx] <- count
+race_hispan <- race_hispan[order(race_hispan$Count, decreasing = T), ]
+addWorksheet(wb, sheetName = "RACE-HISAN")
+writeData(wb, sheet = 3, x = race_hispan)
+
+addWorksheet(wb, sheetName = "BPL")
+writeData(wb, sheet = 4, x = dict_bpl)
+
+addWorksheet(wb, sheetName = "CITIZEN")
+writeData(wb, sheet = 5, x = dict_cit)
+
+# saveWorkbook(wb, "Data Dictionary for Kate.xlsx")
+```
+
+
+Export Dict for RACE for Manual Recoding
+Will recode HISPAN/BPL inline
+```{r}
+# dict_ward <- bind_rows(dict$values)[dict$name == "WARD",]
+# write.csv(dict_ward, "dict_ward.csv", row.names = F)
+# dict_state <- bind_rows(dict$values)[dict$name == "STATEFIP",]
+# write.csv(dict_state, "dict_state.csv", row.names = F)
+# dict_city <- bind_rows(dict$values)[dict$name == "CITY",]
+# write.csv(dict_city, "dict_city.csv", row.names = F)
+
+# write.csv(dict_his, "dict_his.csv", row.names = F)
+# write.csv(dict_his, "dict_his.csv", row.names = F)
+# write.csv(dict_his, "dict_his.csv", row.names = F)
+```
+
+
+

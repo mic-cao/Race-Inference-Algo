@@ -1,0 +1,340 @@
+---
+title: "Table Requests"
+output: html_document
+date: "2024-03-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(dplyr)
+library(vroom)
+library(purrr)
+library(openxlsx)
+```
+
+```{r, message=F}
+start <- proc.time()
+path <- file.path('S:', 'CR4230', 'Projects', 
+                  'Project Collaboration wx233_CR4230')
+dat <- vroom(file.path(path, '1940_census_cleaned.parquet'))
+dat <- as.data.table(dat)
+dat <- dat[RACE!="Non-Hispanic NA"]
+dat <- dat[!is.na(dat$NAMELAST)]
+dat <- dat[!is.na(dat$STATEFIP)]
+dat$STATEFIP <- tolower(dat$STATEFIP)
+print(proc.time()-start)
+```
+
+Uncomment this to run white/nonwhite (CAUTION!!!)
+```{r}
+# sub_path <- "five races/"
+# sub_path <- "two races (w-nw)/"
+# dat$RACE <- ifelse(dat$RACE=="Non-Hispanic White", "White", "Non-White")
+sub_path <- "two races (b-nb)/"
+dat$RACE <- ifelse(dat$RACE=="Non-Hispanic Black", "Black", "Non-Black")
+```
+
+```{r}
+lc_pred <- read.csv(paste0(sub_path,'loan_card_predictions.csv')) # one of the exports as well
+lc_pred <- as.data.table(lc_pred)
+```
+
+```{r}
+table(lc_pred$step)
+round(prop.table(table(lc_pred$step)),4)
+```
+
+Region Mapping
+```{r}
+dict_region <- read.csv("dict_region.csv")
+dat$REGION <- dict_region$label[match(dat$STATEFIP, dict_region$value)]
+```
+
+Table 1: Top 1000 Last Names
+- cols: last name, rank, count, prop100k, cum_prop100k, pct(each race)
+- also do this by each state and region
+```{r}
+states <- sort(unique(dat$STATEFIP))
+races <- unique(dat$RACE)
+regions <- unique(dat$REGION)
+
+cols <- c("state", "name", "rank", "count", "prop100k", "cum_prop_100k", races)
+mat <- matrix(NA, length(states)*1000, 6+length(races))
+for (i in 1:length(states))
+{
+  temp <- dat[STATEFIP==states[i]]
+  top_1000 <- sort(table(temp$NAMELAST), decreasing = T)[1:1000]
+  n <- nrow(temp)
+  mat[(1000*(i-1)+1):(1000*i), 1:5] <- cbind(states[i], 
+                                             names(top_1000), 
+                                             1:1000,
+                                             top_1000,
+                                             top_1000/n*1e5)
+  for (j in (1000*(i-1)+1):(1000*i))
+  {
+    idx <- ifelse(j%%1000!=0, j%%1000, 1000)
+    mat[j, 7:ncol(mat)] <- table(factor(temp[NAMELAST==names(top_1000)[idx], RACE], 
+                                 levels = races))/top_1000[idx]
+  }
+  mat[(1000*(i-1)+1):(1000*i),6] <- cumsum(mat[(1000*(i-1)+1):(1000*i),5])
+}
+
+
+# overall
+mat_ovr <- matrix(NA, 1000, 6+length(races))
+top_1000 <- sort(table(dat$NAMELAST), decreasing = T)[1:1000]
+mat_ovr[1:1000, 1:5] <- cbind("overall", 
+                              names(top_1000),
+                              1:1000,
+                              top_1000,
+                              top_1000/nrow(dat)*1e5)
+for (j in 1:1000)
+{
+  mat_ovr[j, 7:ncol(mat)] <- table(factor(dat[NAMELAST==names(top_1000)[j], RACE], 
+                                   levels = races))/top_1000[j]
+}
+mat_ovr[,6] <- cumsum(mat_ovr[,5])
+
+df1_state <- data.frame(rbind(mat, mat_ovr))
+df1_state[, 3:ncol(mat)] <- lapply(df1_state[, 3:ncol(mat)], as.numeric)
+df1_state[, 5:6] <- round(df1_state[, 5:6], 2)
+df1_state[, 7:ncol(mat)] <- round(df1_state[, 7:ncol(mat)], 4)
+names(df1_state) <- cols
+
+# df1_state[!complete.cases(df1_state),]
+```
+
+```{r}
+cols <- c("region", "name", "rank", "count", "prop100k", "cum_prop_100k", races)
+mat <- matrix(NA, length(regions)*1000, 6+length(races))
+for (i in 1:length(regions))
+{
+  temp <- dat[REGION==regions[i]]
+  top_1000 <- sort(table(temp$NAMELAST), decreasing = T)[1:1000]
+  n <- nrow(temp)
+  mat[(1000*(i-1)+1):(1000*i), 1:5] <- cbind(regions[i], 
+                                             names(top_1000), 
+                                             1:1000,
+                                             top_1000,
+                                             top_1000/n*1e5)
+  for (j in (1000*(i-1)+1):(1000*i))
+  {
+    idx <- ifelse(j%%1000!=0, j%%1000, 1000)
+    mat[j, 7:ncol(mat)] <- table(factor(temp[NAMELAST==names(top_1000)[idx], RACE], 
+                                 levels = races))/top_1000[idx]
+  }
+  mat[(1000*(i-1)+1):(1000*i),6] <- cumsum(mat[(1000*(i-1)+1):(1000*i),5])
+}
+
+df1_region <- data.frame(rbind(mat, mat_ovr))
+df1_region[, 3:ncol(mat)] <- lapply(df1_region[, 3:ncol(mat)], as.numeric)
+df1_region[, 5:6] <- round(df1_region[, 5:6], 2)
+df1_region[, 7:ncol(mat)] <- round(df1_region[, 7:ncol(mat)], 4)
+names(df1_region) <- cols
+```
+
+```{r}
+write.xlsx(list("Top_1000_by_State" = df1_state,
+                "Top_1000_by_Region" = df1_region),
+           file = paste0(sub_path, "Table 1 - Top 1000 Last Names.xlsx"))
+```
+
+Table 2: Top last names by race
+- by state and region
+```{r}
+cols <- c("races", "state", "name", "rank", "count", "per_100k", "pct_in_this_group")
+mat <- matrix(NA, length(states)*length(races)*10, 7)
+for (i in 1:length(states))
+{
+  mat[(length(races)*10*(i-1)+1):(length(races)*10*i), 1:2] <- cbind(rep(races, each=10), 
+                                         states[i])
+  temp <- dat[STATEFIP==states[i]]
+  ln_tab <- sort(table(temp$NAMELAST), decreasing = T)
+  ln_tab <- ln_tab[ln_tab>=10]
+  
+  for (j in 1:length(races))
+  {
+    temp_race <- temp[RACE==races[j]]
+    ln_tab_race <- sort(table(temp_race$NAMELAST), decreasing = T) 
+    ln_tab_race <- ln_tab_race[ln_tab_race>=10]
+    cond_prob <- ln_tab_race/ln_tab[match(names(ln_tab_race), names(ln_tab))]
+    cond_prob <- sort(cond_prob, decreasing = T)[1:10]
+    mat[(length(races)*10*(i-1)+10*(j-1)+1):(length(races)*10*(i-1)+10*j), c(3,7)] <- cbind(names(cond_prob),
+                                                                                            cond_prob)
+  }
+  
+  rank <- match(mat[(length(races)*10*(i-1)+1):(length(races)*10*i), 3], names(ln_tab))
+  mat[(length(races)*10*(i-1)+1):(length(races)*10*i), 4:6] <- cbind(rank,
+                                                                     ln_tab[rank],
+                                                                     ln_tab[rank]/nrow(temp)*1e5)
+}
+
+# overall
+mat_ovr <- matrix(NA, length(races)*10, 7)
+mat_ovr[1:(length(races)*10), 1:2] <- cbind(rep(races, each=10), "overall")
+ln_tab <- sort(table(dat$NAMELAST), decreasing = T)
+ln_tab <- ln_tab[ln_tab>=500]
+for (j in 1:length(races))
+{
+  temp_race <- dat[RACE==races[j]]
+  ln_tab_race <- sort(table(temp_race$NAMELAST), decreasing = T) 
+  ln_tab_race <- ln_tab_race[ln_tab_race>=500]
+  cond_prob <- ln_tab_race/ln_tab[match(names(ln_tab_race), names(ln_tab))]
+  cond_prob <- sort(cond_prob, decreasing = T)[1:10]
+  mat_ovr[(10*(j-1)+1):(10*j), c(3,7)] <- cbind(names(cond_prob), cond_prob)
+}
+rank <- match(mat_ovr[1:(length(races)*10), 3], names(ln_tab))
+mat_ovr[1:(length(races)*10), 4:6] <- cbind(rank, ln_tab[rank], ln_tab[rank]/nrow(temp)*1e5)
+
+df2_state <- data.frame(rbind(mat, mat_ovr))
+df2_state[, 4:7] <- lapply(df2_state[, 4:7], as.numeric)
+df2_state[, 6] <- round(df2_state[, 6], 2)
+df2_state[, 7] <- round(df2_state[, 7], 4)
+names(df2_state) <- cols
+```
+
+```{r}
+mat <- matrix(NA, length(regions)*length(races)*10, 7)
+for (i in 1:length(regions))
+{
+  mat[(length(races)*10*(i-1)+1):(length(races)*10*i), 1:2] <- cbind(rep(races, each=10), 
+                                                                     regions[i])
+  temp <- dat[REGION==regions[i]]
+  ln_tab <- sort(table(temp$NAMELAST), decreasing = T)
+  ln_tab <- ln_tab[ln_tab>=100]
+  
+  for (j in 1:length(races))
+  {
+    temp_race <- temp[RACE==races[j]]
+    ln_tab_race <- sort(table(temp_race$NAMELAST), decreasing = T) 
+    ln_tab_race <- ln_tab_race[ln_tab_race>=100]
+    cond_prob <- ln_tab_race/ln_tab[match(names(ln_tab_race), names(ln_tab))]
+    cond_prob <- sort(cond_prob, decreasing = T)[1:10]
+    mat[(length(races)*10*(i-1)+10*(j-1)+1):(length(races)*10*(i-1)+10*j), c(3,7)] <- cbind(names(cond_prob),
+                                                                                            cond_prob)
+  }
+  
+  rank <- match(mat[(length(races)*10*(i-1)+1):(length(races)*10*i), 3], names(ln_tab))
+  mat[(length(races)*10*(i-1)+1):(length(races)*10*i), 4:6] <- cbind(rank,
+                                                                     ln_tab[rank],
+                                                                     ln_tab[rank]/nrow(temp)*1e5)
+}
+
+df2_region <- data.frame(rbind(mat, mat_ovr))
+df2_region[, 4:7] <- lapply(df2_region[, 4:7], as.numeric)
+df2_region[, 6] <- round(df2_region[, 6], 2)
+df2_region[, 7] <- round(df2_region[, 7], 4)
+names(df2_region) <- cols
+```
+
+```{r}
+write.xlsx(list("Top_by_State" = df2_state,
+                "Top_by_Region" = df2_region),
+           file = paste0(sub_path, "Table 2 - Top Last Names by Race.xlsx"))
+```
+
+Table 3: Percent Matched at each Step 
+- by state and overall
+```{r}
+states <- sort(unique(lc_pred$state))
+mat <- matrix(NA, length(states), 4)
+for (i in 1:length(states))
+{
+  temp <- lc_pred[state==states[i]]
+  mat[i,] <- table(factor(temp$step, levels = 0:3))
+}
+
+df3 <- data.frame(state=states, mat)
+df3$total <- rowSums(df3[, 2:5])
+df3 <- rbind(df3, c("overall", colSums(df3[, 2:6])))
+names(df3)[2:5] <- paste0("step_", 0:3)
+df3[, 2:6] <- lapply(df3[, 2:6], as.numeric)
+
+# relative frequency
+df3_rf <- round(df3[, 2:6]/df3[, 6], 4)
+df3_rf <- cbind(state=df3$state, df3_rf)
+
+write.xlsx(list("step_count" = df3,
+                "step_relative_freq" = df3_rf),
+           file = paste0(sub_path, "Table 3 - Algorithm Steps.xlsx"))
+```
+
+Table 4: Closeness Differences between top two Predicted Categories
+- same table as predictions - but reordered by this difference
+- indicate confidence? (not necessarily...)
+```{r}
+diff <- apply(lc_pred, 1, function(row){
+  sorted_prob <- as.numeric(sort(row[5:(4+length(races))], decreasing = T))
+  return(sorted_prob[1] - sorted_prob[2])})
+
+df4 <- lc_pred
+df4$diff <- diff
+df4 <- df4[order(diff),]
+
+# print percentage of records with diff less than 0.01, 0.05, ... - create table for this!
+delta <- c(0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 1)
+df4_thres <- cbind(threshold = delta, 
+                   count = colSums(outer(na.omit(df4$diff), delta, "<=")), # NAs removed!
+                   rel.freq = round(colMeans(outer(na.omit(df4$diff), delta, "<=")), 4))
+
+# state, nation, N
+# lc_step1 <- df4[step==1, .(first, last, state)]
+# dat_new[NAMEFRST=="john"&NAMELAST=="wang"&STATEFIP=="new york",]
+
+write.xlsx(list("predictions_by_diff" = df4,
+                "agg_by_threshold" = df4_thres),
+           file = paste0(sub_path, "Table 4 - Prediction Closeness.xlsx"))
+```
+
+
+Table 5: racial breakdown of predictions (overall and by state)
+```{r}
+races <- unique(dat$RACE)
+
+mat <- matrix(NA, length(states), length(races))
+for (i in 1:length(states))
+{
+  temp <- lc_pred[state==states[i]]
+  pred <- apply(temp[, 5:(4+length(races))], 1, function(row) races[which.max(row)])
+  mat[i,] <- table(factor(pred, levels = races))
+}
+
+df5 <- data.frame(state=states, mat)
+df5$total <- rowSums(df5[, 2:(1+length(races))])
+df5 <- rbind(df5, c("overall", colSums(df5[, 2:(2+length(races))])))
+names(df5)[2:(1+length(races))] <- races
+df5[, 2:(2+length(races))] <- lapply(df5[, 2:(2+length(races))], as.numeric)
+
+# relative frequency
+df5_rf <- round(df5[, 2:(2+length(races))]/df5[, (2+length(races))], 4)
+df5_rf <- cbind(state=df5$state, df5_rf)
+
+write.xlsx(list("predicted_races_count" = df5,
+                "predicted_races_relative_freq" = df5_rf),
+           file = paste0(sub_path, "Table 5 - Prediction Racial Breakdown.xlsx"))
+```
+
+
+Table 6: standard deviation of predictions (overall and by state)
+```{r}
+mat <- matrix(NA, length(states), 1+length(races))
+for (i in 1:length(states))
+{
+  temp <- lc_pred[state==states[i]]
+  N <- nrow(temp)-sum(is.na(temp[,5]))
+  stddev <- apply(temp[,5:(4+length(races))], 2, function(col) sd(col, na.rm=T))
+  mat[i,] <- c(stddev, N)
+}
+
+df6 <- data.frame(state=states, mat)
+df6 <- rbind(df6, c("overall", apply(lc_pred[,5:(4+length(races))], 2, function(col) sd(col, na.rm=T)),
+             nrow(lc_pred)-sum(is.na(lc_pred[,5]))))
+names(df6)[2:(2+length(races))] <- c(races, "N")
+df6[, 2:(2+length(races))] <- lapply(df6[, 2:(2+length(races))], as.numeric)
+df6[, 2:(2+length(races))] <- round(df6[, 2:(2+length(races))], 2)
+
+write.xlsx(list("standard deviation" = df6),
+           file = paste0(sub_path, "Table 6 - Prediction Variability by Race.xlsx"))
+```
+

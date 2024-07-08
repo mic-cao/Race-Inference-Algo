@@ -1,0 +1,140 @@
+---
+title: "ppl_hhd"
+output: html_document
+date: "2024-02-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(yaml)
+library(data.table)
+library(dplyr)
+library(datasets) # for state names
+library(vroom)
+```
+
+
+```{r}
+dict <- yaml.load_file("R:\\CR4230\\1940_2.0\\us1940b_usa.yml")
+dict <- bind_rows(dict$variables)
+dict_race <- read.csv("dict_race.csv")
+dict_hispan <- read.csv("dict_his.csv")
+dict_bpl <- read.csv("dict_bpl.csv")
+dict_city <- read.csv("dict_city.csv")
+dict_statefip <- read.csv("dict_state.csv")
+```
+
+Simplified Function for Column Matching
+```{r}
+process_ppl <- function(df)
+{
+  cols_to_keep <- c("SERIALP", "RACE", "BPL", "HISPAN", "NAMEFRST", "NAMELAST")
+  cols_to_match <- c("RACE", "BPL", "HISPAN")
+  
+  df <- df[, (names(df) %in% cols_to_keep)]
+  for (col in cols_to_match)
+  {
+    # dict_temp <- bind_rows(dict$values)[dict$name == col, ]
+    dict_temp <- get(tolower(paste0('dict_', col)))
+    df[, col] <- dict_temp$label[match(df[, col], dict_temp$value)]
+    
+    # if (sum(is.na(df[, col])) != 0)
+    # {
+    #   print(paste("WARNING:", sum(is.na(df[, col])), 
+    #               "records in", col, "don't have a match!"))
+    # }
+  }
+  
+  df$RACE <- ifelse(df$HISPAN=='Hispanic', 'Hispanic', 
+                    paste('Non-Hispanic', df$RACE))
+  df$HISPAN <- NULL # remove HISPAN column
+  df$NAMEFRST <- sub("^(\\w+)\\s.*", "\\1", df$NAMEFRST)
+  return(df)
+}
+```
+
+
+```{r}
+process_hhd <- function(df)
+{
+  cols_to_keep <- c("SERIAL", "STATEFIP", "WARD", "CITY")
+  cols_to_match <- c("STATEFIP", "CITY")
+  
+  df <- df[, (names(df) %in% cols_to_keep)]
+  for (col in cols_to_match)
+  {
+    # dict_temp <- bind_rows(dict$values)[dict$name == col, ]
+    dict_temp <- get(tolower(paste0('dict_', col)))
+    df[, col] <- dict_temp$label[match(df[, col], dict_temp$value)]
+    
+    # if (sum(is.na(df[, col])) != 0)
+    # {
+    #   print(paste("WARNING:", sum(is.na(df[, col])), 
+    #               "records in", col, "don't have a match!"))
+    # }
+  }
+  
+  return(df)
+}
+```
+
+
+```{r}
+process_both <- function(df_ppl, df_hhd)
+{
+  df <- left_join(df_ppl, df_hhd, by = c("SERIALP" = "SERIAL"))
+  df$SERIALP <- NULL
+  return(df)
+}
+```
+
+
+Read, Process, and Join
+```{r, message=F, warning=F}
+processed_list <- list()
+path <- file.path('S:', 'CR4230', 'Projects', 
+                  'Project Collaboration wx233_CR4230')
+
+# potentially using matrix or data.table to increase efficiency
+# the partial datasets should also be in parquet/lighter format
+start <- proc.time()
+for (i in 1:109)
+{
+  ppl <- fread(paste0(path, '/census_people_', i,'.csv'))
+  ppl <- process_ppl(data.frame(ppl))
+  hhd <- fread(paste0(path, '/census_households_', i,'.csv'))
+  hhd <- process_hhd(data.frame(hhd))
+  processed_list[[i]] <- process_both(ppl, hhd) 
+  print(paste(i, 'files completed...'))
+}
+print(proc.time() - start)
+```
+Files with mismatches:
+PPL_28: [1] "WARNING: 6 records in RACE don't have a match!"
+        [1] "WARNING: 534 records in BPL don't have a match!"
+PPL_47: [1] "WARNING: 4 records in BPL don't have a match!"
+PPL_62: [1] "WARNING: 1 records in BPL don't have a match!"
+PPL_68: [1] "WARNING: 1 records in BPL don't have a match!"
+PPL_82: [1] "WARNING: 1 records in BPL don't have a match!"
+PPL_86: [1] "WARNING: 1 records in BPL don't have a match!"
+PPL_89: [1] "WARNING: 2 records in BPL don't have a match!"
+PPL_98: [1] "WARNING: 3 records in BPL don't have a match!"
+
+
+Combine and Write Locally
+```{r}
+start <- proc.time()
+output <- rbindlist(processed_list)
+print(proc.time() - start)
+```
+```{r}
+# fwrite(setDT(output), "1940_census_cleaned.parquet", row.names = F)
+# write.csv(output, "1940_census_cleaned.csv", row.names = F)
+# saveRDS(output, file = "1940_census_cleaned.rds")
+fwrite(setDT(output), file.path(path, '1940_census_cleaned.parquet'), row.names = F)
+```
+```{r, message=F}
+# start <- proc.time()
+# output <- vroom("1940_census_cleaned.parquet")
+# print(proc.time() - start)
+```
