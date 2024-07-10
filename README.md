@@ -1,4 +1,4 @@
-# Race/BPL Prediction
+# Demographic-Inference Algorithm
 
 **Author:** Michael Cao  
 **Advisor:** Prof. Wenfei Xu, Cornell University  
