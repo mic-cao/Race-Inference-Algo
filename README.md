@@ -47,4 +47,5 @@ Key results from the project include:
 
 ## Additional Information
 For more details and related published research, please visit [Urban Data Research Lab](https://www.urbandataresearchlab.org/). 
+
 A paper based on the research findings is pending publication. Stay tuned for updates!
