@@ -1,45 +1,30 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Race/BPL Prediction</title>
-</head>
-<body>
-  <h1>Race/BPL Prediction</h1>
+# Race/BPL Prediction
 
-  <h2>Overview</h2>
-  <p>This project, led by Michael Cao, is part of a broader research effort under the Redlining Lab at the Urban Data Research Lab, Cornell University. The Redlining Lab focuses on using big data and spatial data science to understand historical patterns of urban inequality, particularly through the lens of redlining practices in housing markets. By analyzing large-scale demographic data, the lab aims to inform contemporary housing policies and promote more equitable urban development.</p>
+**Author:** Michael Cao  
+**Advisor:** Prof. Wenfei Xu, Cornell University  
+**Status:** In Progress
 
-  <h2>Objective</h2>
-  <p>The primary goal of this project is to develop a predictive model capable of estimating probabilities for race and foreign/native-born status for loan card records based on data from the 1940 US census. This model plays a critical role in the broader research initiative aimed at uncovering and analyzing demographic patterns affected by historical redlining practices across different neighborhoods.</p>
+## Overview
+This repository contains the code and research findings for an ongoing project focused on predicting race and foreign/native-born status based on the 1940 US census data. Led by Michael Cao under the supervision of Prof. Wenfei Xu, this research is part of the broader efforts of the Redlining Lab at the Urban Data Research Lab, Cornell University. The project aims to uncover demographic patterns influenced by historical redlining practices to inform equitable urban development policies.
 
-  <h2>Methods</h2>
-  <p>The prediction algorithm utilizes an advanced adaptation of the Bayesian Improved Surname First-Name Geocoding (BISFG) technique. This approach involves iterative processing of demographic attributes such as first names, last names, and geographic data to infer racial and nativity characteristics. Additional refinement steps are integrated to ensure robust predictions even with incomplete or ambiguous data.</p>
+## Objective
+The primary objective is to develop a robust predictive model using Bayesian Improved Surname First-Name Geocoding (BISFG) techniques. This model will estimate probabilities of race and nativity for loan card records, contributing to a deeper understanding of urban inequalities exacerbated by historical redlining.
 
-  <p>Key steps in the methodology include:</p>
-  <ul>
-    <li>Initial processing of 1940 census data to create a cleaned dataset suitable for model training and prediction.</li>
-    <li>Implementation of the BISFG algorithm with tailored modifications to handle diverse demographic scenarios.</li>
-    <li>Validation and backtesting of the algorithm using sample census data, assessing prediction accuracy through metrics such as confidence intervals and AUC scores.</li>
-  </ul>
+## Methods
+The methodology involves:
+- Cleaning and preprocessing 1940 census data for model training.
+- Implementing BISFG algorithm with enhancements to handle diverse demographic scenarios.
+- Evaluating model accuracy through validation and backtesting using sample census data.
 
-  <h2>Results</h2>
-  <ul>
-    <li>Predicted probabilities were generated for 97.80% of the 39,309 loan card records.</li>
-    <li>Achieved approximately 80.5% accuracy for race prediction across five categories, improving to 83.5% with two categories.</li>
-    <li>Nativity prediction achieved an accuracy of approximately 81%.</li>
-  </ul>
+## Results
+Key results include:
+- 97.80% coverage of loan card records with predicted probabilities.
+- Approximately 80.5% accuracy in race prediction across five categories, improving to 83.5% with two categories.
+- Approximately 81% accuracy in predicting foreign/native-born status.
 
-  <h2>Contributors</h2>
-  <ul>
-    <li><strong>Advisor:</strong> Prof. Wenfei Xu, Director of the Redlining Lab</li>
-    <li><strong>PhD Student:</strong> Kate Thomas</li>
-  </ul>
+## Contributors
+- **Advisor:** Prof. Wenfei Xu
+- **PhD Student:** Kate Thomas
 
-  <h2>Additional Information</h2>
-  <p>More detailed findings and related published research can be explored on the <a href="https://www.urbandataresearchlab.org/">Urban Data Research Lab website</a>. This project's outcomes and methodologies contribute to ongoing efforts in understanding historical and contemporary urban inequalities, influencing evidence-based policy recommendations.</p>
-  
-  <p>Please note that this paper is pending publication.</p>
-</body>
-</html>
+## Additional Information
+For more details and related published research, visit the [Urban Data Research Lab website](https://www.urbandataresearchlab.org/). A paper based on this research is pending publication.
