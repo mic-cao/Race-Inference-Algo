@@ -5,10 +5,10 @@
 
 ## Overview
 This repository contains the code and research findings for an ongoing project focused on predicting race and foreign/native-born status based on the 1940 US census data. Supervised by Dr. Wenfei Xu, this research is part of the broader efforts of the Redlining Lab at the Urban Data Research Lab, Cornell University. The project aims to uncover demographic patterns influenced by historical redlining practices to inform equitable urban development policies.
-- **PPL_HHD.Rmd:** Cleans and preprocesses partitioned people and household data from the 1940 census to produce standardized datasets for model training.
-- **Race Prediction.Rmd:** Implements the Bayesian Improved Surname First-Name Geocoding (BISFG) algorithm with relaxation logics for predicting race probabilities of loan card records.
-- **BPL Prediction.Rmd:** Similar to Race Prediction.Rmd but focuses on predicting native/foreign-born status using historical census and demographic data.
-- **Table Requests.Rmd:** Generates requested tables by integrating census data and loan card predictions to provide detailed demographic insights.
+- **PPL_HHD:** Cleans and preprocesses partitioned people and household data from the 1940 census to produce standardized datasets for model training.
+- **Race Prediction:** Implements the Bayesian Improved Surname First-Name Geocoding (BISFG) algorithm with relaxation logics for predicting race probabilities of loan card records.
+- **BPL Prediction:** Similar to Race Prediction but focuses on predicting native/foreign-born status using historical census and demographic data.
+- **Table Requests:** Generates requested tables by integrating census data and loan card predictions to provide detailed demographic insights.
 
 ## Objective
 The primary objective is to develop a robust predictive model using Bayesian Improved Surname First-Name Geocoding (BISFG) techniques. This model will estimate probabilities of race and nativity for loan card records, contributing to a deeper understanding of urban inequalities exacerbated by historical redlining.
@@ -46,5 +46,5 @@ Key results from the project include:
 - Predicting foreign/native-born status with approximately 81% accuracy.
 
 ## Additional Information
-For more details and related published research, please visit the [Urban Data Research Lab](https://www.urbandataresearchlab.org/). 
+For more details and related published research, please visit [Urban Data Research Lab](https://www.urbandataresearchlab.org/). 
 A paper based on the research findings is pending publication. Stay tuned for updates!
