@@ -20,7 +20,7 @@ The methodology involves several key steps:
 - Cleaning and harmonizing the 1940 census data to ensure consistency and accuracy.
 - Preprocessing steps include standardizing formats, handling missing values, and integrating supplementary demographic data.
 
-### 2. Bayesian Improved Surname First-Name Geocoding (BISFG) Algorithm with Relaxation Logics
+### 2. Bayesian Improved Surname First-Name Geocoding with Relaxation Logics
 #### Algorithm Overview
 The BISFG algorithm is tailored for demographic inference, integrating multiple relaxation logics to enhance prediction accuracy and efficiency:
 - **Step 1:** Initial prediction based on surname and first-name using Bayesian inference techniques.
@@ -45,7 +45,7 @@ Key results from the project include:
 - Attaining approximately 80.5% accuracy in race prediction across five categories, improving to 83.5% accuracy with two categories.
 - Predicting foreign/native-born status with approximately 81% accuracy.
 
-## Additional Information
+## Additional Info
 For more details and related published research, please visit [Urban Data Research Lab](https://www.urbandataresearchlab.org/). 
 
 A paper based on the research findings is pending publication. Stay tuned for updates!
