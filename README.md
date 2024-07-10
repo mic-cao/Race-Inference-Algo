@@ -31,6 +31,12 @@
     <li>Nativity prediction achieved an accuracy of approximately 81%.</li>
   </ul>
 
+  <h2>Contributors</h2>
+  <ul>
+    <li><strong>Advisor:</strong> Prof. Wenfei Xu, Director of the Redlining Lab</li>
+    <li><strong>PhD Student:</strong> Kate Thomas</li>
+  </ul>
+
   <h2>Additional Information</h2>
   <p>More detailed findings and related published research can be explored on the <a href="https://www.urbandataresearchlab.org/">Urban Data Research Lab website</a>. This project's outcomes and methodologies contribute to ongoing efforts in understanding historical and contemporary urban inequalities, influencing evidence-based policy recommendations.</p>
   
