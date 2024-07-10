@@ -4,7 +4,7 @@
 **Advisor:** Dr. Wenfei Xu, Cornell University 
 
 ## Overview
-This repository contains the code and research findings for an ongoing project focused on predicting race and foreign/native-born status based on the 1940 US census data. Led by Michael Cao under the supervision of Prof. Wenfei Xu, this research is part of the broader efforts of the Redlining Lab at the Urban Data Research Lab, Cornell University. The project aims to uncover demographic patterns influenced by historical redlining practices to inform equitable urban development policies.
+This repository contains the code and research findings for an ongoing project focused on predicting race and foreign/native-born status based on the 1940 US census data. Supervised by Dr. Wenfei Xu, this research is part of the broader efforts of the Redlining Lab at the Urban Data Research Lab, Cornell University. The project aims to uncover demographic patterns influenced by historical redlining practices to inform equitable urban development policies.
 
 ## Objective
 The primary objective is to develop a robust predictive model using Bayesian Improved Surname First-Name Geocoding (BISFG) techniques. This model will estimate probabilities of race and nativity for loan card records, contributing to a deeper understanding of urban inequalities exacerbated by historical redlining.
@@ -39,9 +39,6 @@ Key results from the project include:
 - Attaining approximately 80.5% accuracy in race prediction across five categories, improving to 83.5% accuracy with two categories.
 - Predicting foreign/native-born status with approximately 81% accuracy.
 
-## Contributors
-- **Advisor:** Prof. Wenfei Xu
-- **PhD Student:** Kate Thomas
-
 ## Additional Information
-For more details and related published research, visit the [Urban Data Research Lab website](https://www.urbandataresearchlab.org/). A paper based on this research is pending publication.
+For more details and related published research, please visit the [Urban Data Research Lab](https://www.urbandataresearchlab.org/). 
+A paper based on the research findings is pending publication. Stay tuned for updates!
