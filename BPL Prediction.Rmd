@@ -1,0 +1,326 @@
+---
+title: "BPL Prediction"
+output: html_document
+date: "2024-06-30"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup, include=FALSE, message=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(dplyr)
+library(vroom)
+library(foreach)
+library(purrr)
+library(pROC)
+library(openxlsx)
+```
+
+```{r, message=F}
+start <- proc.time()
+path <- file.path('S:', 'CR4230', 'Projects', 
+                  'Project Collaboration wx233_CR4230')
+dat <- vroom(#n_max = 10000000,
+             file.path(path, '1940_census_cleaned.parquet'))
+dat <- as.data.table(dat)
+print(proc.time()-start)
+```
+
+```{r}
+round(colMeans(is.na(dat)), 4)
+colSums(is.na(dat))
+```
+```{r}
+dat <- dat[!is.na(dat$STATEFIP)]
+dat <- dat[!is.na(dat$BPL)]
+dat <- dat[RACE!="Non-Hispanic NA"]
+dat$STATEFIP <- tolower(dat$STATEFIP)
+dat$NAMEFRST <- tolower(dat$NAMEFRST)
+dat$NAMELAST <- tolower(dat$NAMELAST)
+```
+
+Uncomment this to run white/nonwhite (CAUTION!!!)
+```{r}
+sub_path <- "native-foreign/"
+# sub_path <- "five races/"
+# sub_path <- "two races (w-nw)/"
+# dat$RACE <- ifelse(dat$RACE=="Non-Hispanic White", "White", "Non-White")
+# sub_path <- "two races (b-nb)/"
+# dat$RACE <- ifelse(dat$RACE=="Non-Hispanic Black", "Black", "Non-Black")
+```
+
+Condense dataset (count for each unique first-last-state-bpl combination)
+```{r}
+nrow(dat)
+dat_new <- dat[, .N, by = .(NAMEFRST, NAMELAST, STATEFIP, BPL)]
+nrow(dat_new)
+dat_new <- dat_new[complete.cases(dat_new)]
+nrow(dat_new)
+# rm(dat)
+```
+
+```{r}
+loan_card <- readRDS("card_data_formichael_2024_04_24.rds")
+loan_card <- as.data.table(loan_card)
+names(loan_card)[names(loan_card)=="spouse_first"] <- "spouse"
+nrow(loan_card)
+round(colMeans(is.na(loan_card)), 4)
+colSums(is.na(loan_card))
+```
+
+```{r}
+table(loan_card$state_abr)
+length(unique(loan_card$state_name))
+```
+
+For now, we will only work with states that exist in our census data. 
+```{r}
+states <- unique(dat_new$STATEFIP)
+nrow(loan_card)
+loan_card <- loan_card[loan_card$state_name %in% states,]
+nrow(loan_card)
+```
+
+Adding further cleaning - 4/16/24
+1) change all 1-letter first/spouse names to NA
+2) remove duplicate records
+```{r}
+loan_card$first <- ifelse(nchar(loan_card$first) == 1, NA, loan_card$first)
+loan_card$spouse <- ifelse(nchar(loan_card$spouse) == 1, NA, loan_card$spouse)
+
+loan_card <- unique(loan_card) # dedup
+nrow(loan_card)
+
+file_name <- loan_card$file
+loan_card <- loan_card[, c("first","last","spouse","state_name")]
+nrow(unique(loan_card))
+```
+
+
+```{r}
+bpl_tab <- tapply(dat_new$N, dat_new$BPL, sum)
+bpl_tab
+round(prop.table(bpl_tab),4)
+```
+
+Algorithm 1: BISG (with first name)  
+P(R_i=r|S_i=s, F_i=f, G_i=g) =  
+  P(G_i=g|R_i=r)P(R_i=r|S_i=s)P(F_i=f|R_i=r)/sum(P(G_i=g|R_i=r)P(R_i=r|S_i=s)P(F_i=f|R_i=r))  
+
+relaxation rules (used if BISG gives NA or top two racial categories are equal)  
+1) use spouse first name, rerun algorithm  
+2) if still NA or tie, or spouse is NA, relax first name, and run BISG (only last name)  
+3) if still NA or tie, keep it as is
+```{r}
+bpls <- unique(dat_new$BPL)
+bpl_tab <- tapply(dat_new$N, dat_new$BPL, sum)[bpls]
+dat_state <- dat_new[, .(N=sum(N)), by = .(STATEFIP, BPL)]
+dat_last <- dat_new[, .(N=sum(N)), by = .(NAMELAST, BPL)]
+dat_frst <- dat_new[, .(N=sum(N)), by = .(NAMEFRST, BPL)]
+ln_tab <- tapply(dat_last$N, dat_last$NAMELAST, sum)
+fn_tab <- tapply(dat_frst$N, dat_frst$NAMEFRST, sum)
+```
+```{r}
+predict_bpl <- function(first, last, spouse, state)
+{
+  bpl_prob <- rep(NA, length(bpls))
+  step <- 0
+  d2 <- ln_tab[last]
+  if (is.na(d2)||d2==0) {return(c(bpl_prob, step))}
+  
+  if (!is.na(first))
+  {
+    for (i in 1:length(bpls))
+    {
+      d1 <- bpl_tab[i]
+      p1 <- dat_state[BPL==bpls[i]&STATEFIP==state, sum(N)]/d1
+      p2 <- dat_last[BPL==bpls[i]&NAMELAST==last, sum(N)]/d2
+      p3 <-  dat_frst[BPL==bpls[i]&NAMEFRST==first, sum(N)]/d1
+      # print(c(p1,p2,p3))
+      bpl_prob[i] <- p1*p2*p3
+    }
+    bpl_prob <- round(bpl_prob/sum(bpl_prob),4)
+  }
+  if (!anyNA(bpl_prob)) {step <- 1; return(c(bpl_prob,step))}
+  
+  # relax 1: using spouse
+  if (!is.na(spouse))
+  {
+    for (i in 1:length(bpls))
+    {
+      d1 <- bpl_tab[i]
+      p1 <- dat_state[BPL==bpls[i]&STATEFIP==state, sum(N)]/d1
+      p2 <- dat_last[BPL==bpls[i]&NAMELAST==last, sum(N)]/d2
+      p3 <- dat_frst[BPL==bpls[i]&NAMEFRST==spouse, sum(N)]/d1
+      bpl_prob[i] <- p1*p2*p3
+    }
+    bpl_prob <- round(bpl_prob/sum(bpl_prob),4)
+  }
+  if (!anyNA(bpl_prob)) {step <- 2; return(c(bpl_prob,step))}
+  
+  # relax 2: drop first name (BISG - no F)
+  for (i in 1:length(bpls))
+  {
+    p1 <- dat_state[BPL==bpls[i]&STATEFIP==state, sum(N)]/bpl_tab[i]
+    p2 <- dat_last[BPL==bpls[i]&NAMELAST==last, sum(N)]/d2
+    bpl_prob[i] <- p1*p2
+  }
+  bpl_prob <- round(bpl_prob/sum(bpl_prob),4)
+  if (!anyNA(bpl_prob)) {step <- 3; return(c(bpl_prob,step))}
+  
+  return(c(bpl_prob,step))
+}
+```
+
+
+```{r}
+dat_new[NAMEFRST=="mary"&NAMELAST=="thomas"&STATEFIP=="new york",]
+predict_bpl("mary", "thomas", NA, "new york")
+```
+
+```{r}
+dat_new[NAMEFRST=="james"&NAMELAST=="wong"&STATEFIP=="new york",]
+predict_bpl("james", "wong", NA, "new york")
+dat_new[NAMEFRST=="james"&NAMELAST=="wong"&STATEFIP=="new jersey",]
+predict_bpl("james", "wong", NA, "new jersey")
+dat_new[NAMEFRST=="john"&NAMELAST=="wang"&STATEFIP=="new york",]
+predict_bpl("john", "wang", NA, "new york") 
+```
+
+Backtest accuracy on census data 
+```{r, include=F, eval=F}
+rows <- sample(nrow(dat), 50)
+temp <- dat[rows, c(3,4,4,5)]
+temp[,3] <- NA
+actual <- dat[rows, 'BPL']
+# table(actual)
+names(temp) <- c("first","last","spouse","state")
+start <- proc.time()
+bpl_prob_mat <- apply(temp, 1, function(row) do.call(predict_bpl, as.list(row)))
+print(proc.time()-start)
+
+pred <- apply(bpl_prob_mat[1:length(bpls),], 2, function(col) bpls[which.max(col)])
+p <- mean(unlist(pred)==actual)
+se <- sqrt(p*(1-p)/length(rows))
+ci <- p+c(-1,1)*qnorm(.975)*se
+cat(sprintf("95%% CI: [%.4f, %.4f]\n", ci[1], ci[2]))
+```
+Testing the algorithm using census data, we achieve an accuracy of around 92%.
+
+
+train-test split (by state and overall)
+```{r}
+backtest <- function(nsim = 2000)
+{
+  output_mat <- matrix(NA, length(states)+1, 4)
+  auc_mat <- matrix(NA, length(states)+1, length(bpls))
+  start <- proc.time()
+  for (i in 1:length(states))
+  {
+    dat_i <- dat[dat$STATEFIP == states[i],]
+    rows <- sample(nrow(dat_i), nsim)
+    temp <- dat_i[rows, c(3,4,4,5)]
+    temp[,3] <- NA
+    actual <- dat_i[rows, 'BPL']
+    names(temp) <- c("first","last","spouse","state")
+    temp$first <- ifelse(nchar(temp$first) == 1, NA, temp$first)
+    bpl_prob_mat <- apply(temp, 1, function(row) do.call(predict_bpl, as.list(row)))
+    
+    for (r in 1:length(bpls))
+    {
+      labels <- ifelse(actual == bpls[r], 1, 0)
+      if (all(labels == 0) | all(labels == 1))
+      {
+        auc_mat[i,r] <- NA
+      }
+      else
+      {
+        auc_mat[i,r] <- round(auc(roc(labels, t(bpl_prob_mat)[,r])),4)
+      }
+    }
+    # print(auc_mat[i,])
+    
+    pred <- apply(bpl_prob_mat[1:length(bpls),], 2, function(col) bpls[which.max(col)])
+    p <- mean(unlist(pred)==actual)
+    se <- sqrt(p*(1-p)/nsim)
+    ci <- p+c(-1,1)*qnorm(.975)*se
+    output_mat[i,] <- round(c(ci[1], p, ci[2], nsim), 4)
+  }
+  
+  # run overall
+  rows <- sample(nrow(dat), 5*nsim)
+  temp <- dat[rows, c(3,4,4,5)]
+  temp[,3] <- NA
+  actual <- dat[rows, 'BPL']
+  names(temp) <- c("first","last","spouse","state")
+  bpl_prob_mat <- apply(temp, 1, function(row) do.call(predict_bpl, as.list(row)))
+  
+  for (r in 1:length(bpls))
+  {
+    labels <- ifelse(actual == bpls[r], 1, 0)
+    if (all(labels == 0) | all(labels == 1))
+    {
+      auc_mat[length(states)+1, r] <- NA
+    }
+    else
+    {
+      auc_mat[length(states)+1, r] <- round(auc(roc(labels, t(bpl_prob_mat)[,r])),4)
+    }
+  }
+  
+  pred <- apply(bpl_prob_mat[1:length(bpls),], 2, function(col) bpls[which.max(col)])
+  p <- mean(unlist(pred)==actual)
+  se <- sqrt(p*(1-p)/length(rows))
+  ci <- p+c(-1,1)*qnorm(.975)*se
+  output_mat[length(states)+1,] <- round(c(ci[1], p, ci[2], nsim*5), 4)
+  print(proc.time()-start)
+   
+  result <- cbind(c(states, "overall"), auc_mat, output_mat)
+  colnames(result) <- c('state', paste0("AUC(", bpls, ")"), 'lower', 'center', 'upper', "N")
+  return(result)
+}
+
+```
+```{r, warning=F}
+result_1 <- backtest(nsim = 2500)
+result_2 <- backtest(nsim = 2500)
+result_3 <- backtest(nsim = 5000)
+
+write.xlsx(list("backtest_1" = result_1,
+                "backtest_2" = result_2,
+                "backtest_3" = result_3),
+           file = paste0(sub_path, "Table 7 - Backtest Accuracy.xlsx"))
+```
+
+Now, we will run the algorithm on the loan cards data.
+```{r}
+bpls <- unique(dat_new$BPL)
+bpl_tab <- tapply(dat_new$N, dat_new$BPL, sum)[bpls]
+dat_state <- dat_new[, .(N=sum(N)), by = .(STATEFIP, BPL)]
+dat_last <- dat_new[dat_new$NAMELAST %in% unique(loan_card$last),]
+dat_last <- dat_last[, .(N=sum(N)), by = .(NAMELAST, BPL)]
+dat_frst <- dat_new[dat_new$NAMEFRST %in% unique(c(loan_card$first, loan_card$spouse)),]
+dat_frst <- dat_frst[, .(N=sum(N)), by = .(NAMEFRST, BPL)]
+ln_tab <- tapply(dat_last$N, dat_last$NAMELAST, sum)
+fn_tab <- tapply(dat_frst$N, dat_frst$NAMEFRST, sum)
+```
+```{r}
+names(loan_card)[names(loan_card)=="state_name"] <- "state"
+start <- proc.time()
+bpl_prob_mat <- apply(loan_card, 1,
+                        function(row) do.call(predict_bpl, as.list(row)))
+print(proc.time()-start)
+# table(bpl_prob_mat[6,])
+```
+
+
+```{r}
+output <- cbind(loan_card, t(bpl_prob_mat), file_name)
+names(output)[5:(5+length(bpls))] <- c(bpls, "step")
+head(output, 10)
+fwrite(output, paste0(sub_path, 'loan_card_bpl_predictions.csv'))
+```
+
